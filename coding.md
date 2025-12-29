@@ -5,3 +5,4 @@
 - `detail::` is internal, never public API
 - Layout: `include/` (public), `src/` (impl + private), `test/`
 - RAII scope guards over try-catch; dismissible for commit/rollback
+- order: dtor, ctors, assigns, compares
