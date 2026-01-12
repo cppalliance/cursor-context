@@ -1,0 +1,40 @@
+---
+description: Workspace-aware commit workflow for multi-repo setup
+globs:
+alwaysApply: true
+---
+
+# Workspace-Aware Commit Workflow
+
+When handling commit commands (e.g., `/agent-cpp/commit [workspace-hint]`), **ALWAYS** switch to the correct workspace directory before running git operations.
+
+## Workspace Path Mapping
+
+Map workspace hints to their actual paths:
+
+- **agentcpp** → `C:\Users\Vinnie\src\agent-cpp`
+- **corosio** → `C:\Users\Vinnie\src\boost\libs\corosio`
+- **capy** → `C:\Users\Vinnie\src\boost\libs\capy`
+- **asio** → `C:\Users\Vinnie\src\boost\libs\asio`
+
+## Required Workflow
+
+1. **Parse workspace hint** from command (e.g., "agentcpp" in `/agent-cpp/commit agentcpp`)
+2. **Map hint to workspace path** using the mapping above
+3. **Check current directory** with `pwd` or equivalent
+4. **Switch to target directory** if different: `cd <workspace-path>`
+5. **Confirm which repo** you're working in before committing
+6. **Execute git operations** in the correct directory
+
+## Critical Rule
+
+**NEVER commit in the current directory without checking if a workspace hint was provided.** Always switch directories first if a hint is present.
+
+## Example
+
+User command: `/agent-cpp/commit agentcpp`
+
+1. Detect hint: "agentcpp"
+2. Map to: `C:\Users\Vinnie\src\agent-cpp`
+3. Switch: `cd C:\Users\Vinnie\src\agent-cpp`
+4. Then: `git add -A`, `git commit`, etc.
