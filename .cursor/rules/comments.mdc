@@ -1,0 +1,12 @@
+---
+description: Comments explain novel why, not how or what
+globs:
+alwaysApply: true
+---
+
+# Comment Style
+
+- Comments explain **novel why**, not how or what
+- Code should be self-documenting for the how/what
+- Keep comments short
+- If the reason is obvious, no comment needed
