@@ -10,3 +10,4 @@ alwaysApply: true
 - Public interface last
 - Javadoc on almost all public functions
 - struct if all public, else class
+- never break encapsulation without explicit instruction
