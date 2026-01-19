@@ -1,6 +1,10 @@
 ---
-description: Javadoc documentation style for C++ public APIs and implementation comments
+description: Documentation style conventions for code snippets, javadocs, and API documentation examples
+globs: 
+alwaysApply: false
 ---
+
+- ONLY IN DOCS: space inside matching delimiters ()[]{} 
 
 # Javadoc Documentation
 
