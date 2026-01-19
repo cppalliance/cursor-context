@@ -1,10 +1,8 @@
 ---
-description: Create or update Javadoc documentation for a C++ header file and its corresponding source file
+description: Javadoc documentation style for C++ public APIs and implementation comments
 ---
 
-# Javadoc Documentation Command
-
-Create or update documentation for the current file. For header files, also find and document the corresponding source file.
+# Javadoc Documentation
 
 ## Scope
 
@@ -22,7 +20,7 @@ Create or update documentation for the current file. For header files, also find
 - One or two lines explaining the "why" of non-obvious or surprising code
 - Helps LLMs and humans quickly understand motivation
 
-**Automatic pairing**: When run on a header file (`.hpp`, `.h`), also find and document its corresponding source file (`.cpp`, `.cc`) in the same directory or `src/` directory.
+**Automatic pairing**: When documenting a header file (`.hpp`, `.h`), also find and document its corresponding source file (`.cpp`, `.cc`) in the same directory or `src/` directory.
 
 ## Brief Style
 
