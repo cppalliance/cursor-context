@@ -56,6 +56,19 @@ For full Javadocs, use this order (include only relevant sections):
 9. `@return`
 10. `@see`
 
+## Section Guidelines
+
+Include sections only when relevant:
+
+| Section | Include When |
+|---------|--------------|
+| Preconditions | Function has requirements on inputs or state |
+| Effects | Behavior isn't obvious from name/signature |
+| Postconditions | Guarantees beyond "returns X" |
+| Exception Safety | Function can throw or has specific guarantees |
+| Thread Safety | Class/function used in concurrent contexts |
+| Complexity | Non-trivial algorithmic complexity |
+
 ## Content Guidelines
 
 - **Explain the problem first** - After the brief, explain what problem the class or function solves
@@ -70,6 +83,18 @@ For full Javadocs, use this order (include only relevant sections):
 Use `@` prefix (not `\`): `@param`, `@return`, `@pre`, `@post`, `@throws`, `@note`, `@see`, `@code`/`@endcode`, `@tparam`
 
 **@tparam**: Only for template parameters NOT deduced from function arguments. Skip for variadic packs (`Args...`) or types evident from `@param`.
+
+## Exception Safety
+
+Document the guarantee level for functions that can throw:
+
+| Guarantee | Meaning |
+|-----------|---------|
+| Nothrow | Never throws. Mark `noexcept`. |
+| Strong | If exception thrown, state unchanged (commit-or-rollback). |
+| Basic | If exception thrown, invariants preserved, no leaks, valid but unspecified state. |
+
+For conditional guarantees: "Strong if `T` is nothrow-move-constructible; otherwise basic."
 
 ## Examples
 
