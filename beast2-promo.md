@@ -1,4 +1,4 @@
-# Boost.Beast2: Coroutines-First Networking for Modern C++
+# Boost.Beast2: Coroutines-Only Networking for Modern C++
 
 ## The Problem
 
@@ -31,7 +31,7 @@ Beast2 is an umbrella term for a family of libraries that work together:
 
 **Boost.Capy** — The execution foundation, optimized for async I/O. Core types: `task<T>`, `thread_pool`, `strand`, `async_mutex`. Tasks propagate executor context through `await_suspend` automatically, guaranteeing correct executor affinity. Provides allocation-free type erasure, frame allocators for coroutine memory, automatic stop token propagation, and buffer algorithms. **This should go into the C++ Standard Library**.
 
-**Boost.Corosio** — Coroutine-first portable networking and I/O that wrap per-platform implementations. Every operation returns an awaitable; no callbacks. Core types: `socket`, `acceptor`, `resolver`, `strand`, `io_context`, SSL stream wrappers (WolfSSL and OpenSSL), non-templated streams, scatter/gather buffers, native `std::stop_token` cancellation. This **should not** go into the C++ Standard Library, for a while.
+**Boost.Corosio** — Coroutine-only portable networking and I/O that wrap per-platform implementations. Every operation returns an awaitable; no callbacks. Core types: `socket`, `acceptor`, `resolver`, `strand`, `io_context`, SSL stream wrappers (WolfSSL and OpenSSL), non-templated streams, scatter/gather buffers, native `std::stop_token` cancellation. This **should not** go into the C++ Standard Library, for a while.
 
 **Boost.Http** — Sans-I/O HTTP/1.1 with strict RFC compliance. Protocol logic isolated from I/O for testability and framework independence. Core types: `request`, `response`, `parser`, `serializer`, `router`. Non-templated containers, memory-bounded parsers, body streaming, Express.js-style routing, automatic gzip/deflate/brotli application, and an extensive collection of HTTP "middleware" algorithms such as multipart/form processing, cookie management, bcrypt, and more.
 
