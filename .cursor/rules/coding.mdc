@@ -4,6 +4,8 @@ globs:
 alwaysApply: true
 ---
 
+**ALWAYS compile and FIX ALL ERRORS after making changes**
+
 # Class Layout
 
 - Private data members first
