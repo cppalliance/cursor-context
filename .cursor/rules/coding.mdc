@@ -26,4 +26,4 @@ alwaysApply: true
 - use IILE parameters instead of captures in lambda coroutines
 - don't include private headers from other libraries (e.g. detail/)
 - use detail::throw_*, never naked throw at call sites
-
+- don't explain implementation in public javadocs, only explain API
