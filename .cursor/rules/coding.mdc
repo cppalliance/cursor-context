@@ -27,3 +27,4 @@ alwaysApply: true
 - don't include private headers from other libraries (e.g. detail/)
 - use detail::throw_*, never naked throw at call sites
 - don't explain implementation in public javadocs, only explain API
+- ALWAYS std::string_view, NEVER core::string_view
