@@ -50,11 +50,18 @@ API. Without them, scoring is meaningless.
 ### G0. Documentation Exists and Is Usable
 
 The public interface must be documented, and the documentation must
-describe the **API contract**, not the implementation.
+describe the **API contract**, not the implementation. Documentation
+may live inline (Javadoc, Doxygen) or externally (AsciiDoc, markdown,
+HTML reference pages) - the location does not matter as long as the
+information exists and is discoverable. Inline doc comments are a
+convenience, not a requirement; in large codebases with millions of
+lines spread across many libraries, comments in public headers force
+rebuilds of every downstream translation unit when edited, making
+them a maintenance liability. External documentation avoids this cost.
 
 | Pass | Fail |
 |------|------|
-| Public functions and types have doc comments (Javadoc, Doxygen, or equivalent) | No documentation on public interface |
+| Public functions and types are documented (inline or external) | No documentation on public interface |
 | At least one motivating example shows real usage | Only auto-generated signature lists |
 | Docs describe what the user does and gets back | Docs describe how the implementation works internally |
 | Parameters, return values, and preconditions are documented | User must read source to understand behavior |
@@ -769,6 +776,15 @@ wants to do (use cases) rather than what the library contains
 (reference)? Do examples compile and teach? Does the documentation
 enable progressive discovery?
 
+Documentation may live inline (Javadoc/Doxygen in headers) or
+externally (AsciiDoc, markdown, HTML reference pages, man pages).
+Neither form is inherently superior. Inline comments offer IDE
+integration but force downstream rebuilds when edited - a real cost
+in large codebases. External documentation avoids rebuild cascades
+and can be richer (cross-references, rendered tables, diagrams) but
+requires the user to leave the editor. Evaluate the documentation
+that exists, wherever it lives, on its completeness and usability.
+
 > "If your design is correct, the use cases that drove it are also the
 > tutorials that teach it. A design that requires extensive prerequisite
 > explanation before the user can write their first line of code is a
@@ -956,6 +972,8 @@ doc excerpts. Cite specific line numbers or sections where relevant.]
    tries to write code.
 
 8. Produce the report in the exact format specified in Part 3.
+
+9. Do NOT hard-wrap prose lines. Write each paragraph as a single long line and let the editor or renderer handle wrapping. Only break lines where markdown requires it (blank lines between paragraphs, list items, headings, table rows, code fences). This applies to every prose section of the report: executive summary, gate notes, strengths, weaknesses, and detailed analysis.
 
 ---
 
