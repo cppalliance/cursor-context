@@ -85,8 +85,10 @@ Multicast/Network (ASIO or DPDK)
 
 - **HRT (Hudson River Trading):** Trades trillions using stdexec approach. CppCon engineer explained precisely how they do IO-to-compute dispatch.
 - **Citadel:** Migrated an entire asset class to stdexec ~6 months ago.
-- **TooManyCooks:** Ivan's preferred async runtime. Has ASIO support, integrates switching between CPU and IO work, has optimizations for Clang HALO that Corosio could potentially adopt.
-- **stdexec / sender-receiver:** The HFT community is adopting this model. It works well for the IO -> compute -> IO pipeline pattern. Ivan doesn't personally use it (prefers TooManyCooks) but understands why the community likes it.
+- **TooManyCooks:** Ivan's preferred async runtime. Has ASIO support, integrates switching between CPU and IO work, has optimizations for Clang HALO that Corosio could potentially adopt. Ivan clarified TooManyCooks is **not** a direct competitor to std::execution - its algorithms are not as extensible or composable. What Ivan likes about it: CPU topology awareness, Clang HALO optimizations, and specific algorithms (fork, fork group, post bulk). He started using it recently and is still evaluating customization points.
+- **stdexec / sender-receiver:** The HFT community is adopting this model. It works well for the IO -> compute -> IO pipeline pattern. Ivan doesn't personally use it (prefers TooManyCooks) but understands why the community likes it. Ivan believes std::execution has no real competitor as an abstraction - it is very extensible and its algorithms are composable, allowing users to easily create new ones.
+- **Citadel and std::execution:** Herb Sutter was hired as fellow at Citadel and pushed for std::execution adoption. Citadel implemented their own (likely standard-conformant) version and migrated an entire asset class to it. Ivan's take: Citadel's engineers would not sacrifice PnL (profit and loss) for ideology - if they adopted it, it must actually work. This is meaningful signal.
+- **Does standardization matter?** Vinnie questioned whether being in the standard matters for HFT, since HFT firms do not share libraries or download algorithms from GitHub. Ivan agreed that standardization per se does not matter - Citadel built their own. What matters is the abstraction itself and its implications for ecosystem building. stdexec provides a "standard way to do things" that influences what gets built on top of it, which is why inclusion in the standard is important even if individual firms roll their own conformant implementations.
 - **Golang comparison:** If performance isn't the differentiator, people will just write a Go backend for 50-70k req/s with better ergonomics than anything C++ offers.
 
 ---
@@ -184,6 +186,167 @@ This conversation confirms the hypothesis from the earlier session:
 
 > "High performance, HFT, compute - all of this is in-scope for Capy and Corosio. We aim to outperform everything." -- Vinnie
 
+> "socket read -> parse, then -> serialize into shm queue + normalized protocol back into shared memory is done in one go as a zero copy operation in shared memory queue which is neat for performance ... after the socket read is done you should never ever block ideally you move to cpu executor and schedule another read again" -- Ivan
+
+> "extensible backend without forking the library users should be able to add backend like dpdk without forking and be able to use the rest of your library or maybe they want their own epoll because they deem your to be too slow" -- Ivan
+
+> "type erasure ... I fear this will be the biggest concern of a rather large and important community looking into these libraries. In my day job I can tell you there is not a single class which uses type erasure or virtual functions. Everything I MEAN EVERYTHING is CRTP all the way down sometimes with 5 layers dep hierarchy" -- Ivan
+
+> "there are even implementation details which if corosio gets right will win on performance on asio they just need to be highlighted well, a few more APIs which are important like receiving multiple messages from UDP very important and saves a lot on syscalls recvmmsg()" -- Ivan
+
+> "a low level abstraction layer which puts the absolute bare minimum between the file descriptor and the calling code" -- Vinnie (defining Corosio's value)
+
+> "I do not think std::execution has any competitor at the moment. It's very interesting and extensible abstraction. The algorithms are composable and users can easily create new ones." -- Ivan
+
+> "std::execution is just a lot of type masturbation to compose types and objects correctly thus even if it's in standard I do think it makes any guarantees for performance this is left to the users which is good. It just provides the standard way to do things from now on it has implications for ecosystems on what to build on top of it so that's why it's important that it will be in the standard" -- Ivan
+
+> "If my year end bonus depends on performance I'll not cut my paycheck because someone said std execution is better I'll prove it and then implement it within a major asset class." -- Ivan
+
+> "HFT/finance do not share libraries. You don't download HFT algos from github. So what is the need for interop? A third-party stdexec is just as good as std::execution." -- Vinnie
+
+---
+
+## Feb 14 Follow-Up: SPSC Queue Deep Dive & Architecture Clarification
+
+### Queue Saturation (Slack, Feb 14)
+
+Vinnie asked Ivan how saturated his SPSC shared-memory queues are (how often empty or full).
+
+- Ivan's queues use a **load factor** metric exposed through Prometheus
+- SPMC with 32 consumers: easily above 500k msg/sec
+- With 1/2/4/8 consumers: millions of msg/sec, faster than Boost concurrent containers, moodycamel, and Aeron
+- Crypto exchange saturation depends on venue: MEXC spot = 25-35k msg/sec, options + futures + spot estimated 90-110k msg/sec
+- Average exchange message size: 223 bytes
+- Queues are **byte buffers in shared memory with specific layout** where bytes are serialized, not typed template containers
+
+### Coroutines Do Not Fit the Hot Path
+
+Ivan confirmed: **coroutines do not fit into the shared-memory queue pipeline**. The compute pipeline is pure spin loops on dedicated cores. No coroutines, no event loop, no suspension/resumption.
+
+### Inbound Data Pipeline (Ivan, Feb 14)
+
+Ivan clarified his actual path:
+
+> socket read -> parse -> serialize into shm queue + normalized protocol back into shared memory
+
+The parse and serialize-to-queue steps are done **in one go as a zero-copy operation in shared memory**, which is good for performance. After the socket read is done, the IO thread should never block - ideally it moves to a CPU executor and schedules another read immediately.
+
+The earlier description (5 discrete steps) was an idealization. In practice, parse + serialize-to-queue are fused for zero-copy. The key constraint remains: after socket read completes, never block.
+
+### Main Loop Architecture (Ivan, Feb 14)
+
+Ivan shared his actual main loop code:
+
+```cpp
+class loop_timer {
+    uint64_t loop_timer_freq_cycles_;
+    uint64_t next_loop_update_cycles_;
+public:
+    explicit loop_timer(std::chrono::nanoseconds frequency)
+        : loop_timer_freq_cycles_(tsc_clock::nanoseconds_to_cycles(frequency.count()))
+        , next_loop_update_cycles_(tsc_clock::get_cycles() + loop_timer_freq_cycles_) {}
+
+    bool should_poll_io_context() const {
+        return tsc_clock::get_cycles() > next_loop_update_cycles_;
+    }
+
+    void execute_poll(boost::asio::io_context& ioc) {
+        uint64_t now = tsc_clock::get_cycles();
+        if (now > next_loop_update_cycles_) {
+            next_loop_update_cycles_ = now + loop_timer_freq_cycles_;
+            ioc.poll();
+        }
+    }
+};
+
+class loop_executor {
+public:
+    static void execute_iteration(loop_timer& timer, idle_strategy& idle,
+                                  queue_poller& poller, boost::asio::io_context& ioc) {
+        timer.execute_poll(ioc);   // drain completions (non-blocking)
+        idle.idle();               // _mm_pause or busy poll
+        poller.poll_all();         // poll shared-memory client queues
+    }
+};
+```
+
+Key insight: `ioc.poll()` is called at a **TSC-controlled frequency** to balance keeping the path hot vs. minimizing syscall overhead. The loop knows roughly how often messages arrive (e.g. every 50us) and tunes the poll interval accordingly.
+
+### Where Corosio Adds Value (Vinnie, Feb 14)
+
+Vinnie defined Corosio's value proposition for this audience:
+
+> A low-level abstraction layer which puts the absolute bare minimum between the file descriptor and the calling code.
+
+Corosio's responsibility lies at the socket read boundary. Everything after that (parse, serialize, queue push) is user code running on the IO or compute executor.
+
+### Ivan's Adoption Concerns (Feb 14)
+
+Ivan listed specific concerns that HFT engineers will raise:
+
+1. **Extensible backend without forking** - Users must be able to add backends like DPDK without forking. They may also want their own epoll implementation if they deem the default too slow.
+
+2. **UDP multi-message receive (`recvmmsg`)** - POSIX allows receiving more than one UDP message per syscall via `recvmmsg()`. This was never implemented in ASIO and would be a significant win for Corosio. Very important for reducing syscall overhead on market data feeds.
+
+3. **Type erasure skepticism** - This will be the biggest concern from the HFT community. Ivan's day job codebase has zero virtual functions and zero type erasure. Everything is CRTP, sometimes 5 layers deep, combined with traits classes for type passing. Ivan personally believes type erasure can work if implemented well, but the skeptical audience will never consider it without extensive benchmarking proving that the specific implementation (small buffer optimization, static vtables, etc.) performs comparably to CRTP-based hierarchies for compile-time types.
+
+4. **Internal data structure quality** - ASIO uses slow data structures internally (`std::deque` with bad allocation patterns, `std::unordered_map` which is slow). Corosio should use better alternatives (`boost::unordered_flat_map` for cache locality, etc.). Getting implementation details right and highlighting them is a competitive advantage over ASIO.
+
+Ivan's summary: correct and optimized implementation details + better APIs (like `recvmmsg`) + a strong benchmark suite proving design choices do not sacrifice performance for ergonomics = path to adoption.
+
+### Corosio Layered Architecture (Vinnie, Feb 14)
+
+Vinnie described Corosio's refactored layered design that addresses the type erasure concern:
+
+**Layer 1 (highest) - Fully type-erased streams:**
+- Nothing visible, fast compile times, ABI stability
+- e.g. `io_stream&` - runtime polymorphism, virtual dispatch, no inlining
+
+**Layer 2 - Concrete types hiding the platform reactor:**
+- Nothing visible, fast compile times, ABI stability
+- e.g. `tcp_socket&` - one level of indirection, no inlining
+
+**Layer 3 (lowest) - Concrete types tied to the reactor:**
+- Including these headers makes the entire implementation visible
+- Full function inlining, no virtuals, no indirection
+- e.g. `epoll_tcp_socket`, `iocp_tcp_socket`, `io_uring_tcp_socket`, `dpdk_tcp_socket`
+
+Users choose the tradeoff at each level. An inheritance hierarchy, thoughtfully layered, where the user controls performance vs. abstraction:
+
+```cpp
+// Maximum performance: full inlining, direct OS calls
+epoll_tcp_socket sock(ctx);
+
+// Can still pass to type-erased interfaces when needed
+void do_something(tcp_socket& sock);  // one indirection
+void do_generic(io_stream& sock);     // virtual dispatch
+```
+
+Algorithms can be written entirely with templates (like ASIO), accepting any concrete socket type. Pass `dpdk_tcp_socket&` and get DPDK performance. Pass `io_uring_tcp_socket&` and get full inlining with io_uring. Pass `tcp_socket&` and pay one indirection. Pass `io_stream&` and get full runtime polymorphism.
+
+### Implications for Capy/Corosio
+
+1. **Capy's value is NOT in the queue itself** - raw SPSC/MPMC queues are commodity; Ivan's are already faster than all open-source alternatives
+2. **Capy's value is on the NIC boundary** - the IO-to-compute transition: read from network, deserialize via zero-allocation coroutine, push to queue
+3. **The queue write is I/O** - serializing to shared memory or fanning out to sockets should be treated as I/O, potentially on a separate executor
+4. **No coroutine wrapper needed for queues** - the compute side spins on `try_pop`/`try_push` directly; adding coroutine overhead would be counterproductive
+5. **Lock-free SPSC queue in Capy** - useful as a building block and for the IO-side handoff, but should remain a raw `try_push`/`try_pop` interface without async wrappers in the hot path
+6. **Corosio's layered architecture directly addresses the type erasure concern** - HFT users work at layer 3 with zero overhead; library authors and general users work at layers 1-2 with ergonomics
+
+### SPSC Queue Implementation (Feb 14)
+
+Implemented `spsc_queue<T,N>` in Capy as a first step:
+- Header: `include/boost/capy/queue/spsc.hpp`
+- Tests: `test/unit/queue/spsc.cpp`
+- Lock-free, cache-line-separated cursors, power-of-2 capacity, trivially-copyable T constraint
+- All tests pass including threaded stress tests
+
+### Open Questions from This Session
+
+- Should the queue also have a byte-buffer variant (variable-length messages, memcpy-based) matching Ivan's "bytes are serialized" model?
+- What does the IO-side coroutine look like that reads from the network and pushes to the queue? This is where Capy/Corosio adds value
+- How does `resume_on(executor)` interact with the queue push at the end of the inbound pipeline?
+
 ---
 
 ## Follow-Up
@@ -195,3 +358,7 @@ This conversation confirms the hypothesis from the earlier session:
 - [ ] Review Corosio executor model for `resume_on` feasibility
 - [ ] Ivan to try porting websocket or FIX code to Corosio (~1 month timeframe, no hard ETA)
 - [ ] Research Citadel's stdexec migration for patterns/lessons
+- [ ] Implement `recvmmsg()` support in Corosio UDP path
+- [ ] Build type erasure vs. CRTP benchmark suite to address HFT community skepticism
+- [ ] Audit Corosio internals for suboptimal data structures (deque, unordered_map) and replace
+- [ ] Document Corosio's layered architecture (type-erased -> concrete -> reactor-specific) for HFT audience
