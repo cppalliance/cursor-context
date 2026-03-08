@@ -4,7 +4,7 @@ globs:
 alwaysApply: true
 ---
 
-Every generated plan file must include this execution protocol: "Save output after each complete semantic unit (never mid-paragraph). Always save output BEFORE marking plan items done—never the reverse. On resumption: read the plan and last ~30 lines of the output file. Repair any truncated tail. Continue from where output ends, matching existing style. Never rewrite prior content."
+Every generated plan file must include this execution protocol: "Save output after each complete semantic unit or to-do item (never mid-paragraph). Always save output BEFORE marking plan items done—never the reverse. On resumption: read the plan and last ~30 lines of the output file. Repair any truncated tail. Continue from where output ends, matching existing style. Never rewrite prior content."
 
 - md files: do not hard-wrap lines unless requested; metadata key-value fields use bullet lists, not bare lines (bare consecutive lines render as a single paragraph)
 

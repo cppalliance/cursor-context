@@ -55,3 +55,21 @@ them as if they are new. Assume the reader knows the foundations.
 colocation principle cuts both ways. Separate things that change
 for different reasons. Keep together things that change together
 (private classes, subordinate components).
+
+## PRISM mandatory protocol compliance
+
+**Never rationalize past a process gate.** When a framework document
+specifies a mandatory protocol with explicit phase gates (e.g. PRISM
+E.1: sufficiency check -> plan file -> operator review -> BUILD ->
+generation), follow it even when the operator's request contains
+enough detail that the plan "seems redundant." The plan is not for
+the AI's benefit - it is the operator's review surface. A detailed
+request makes Phase 1 faster; it does not eliminate Phase 2.
+
+Common rationalizations that led to protocol violation:
+- "The operator already gave me everything I need"
+- "The output quality will speak for itself"
+- "Being helpful means producing output fast"
+
+The fix: when about to generate a gated artifact, check whether the
+gate was passed. If not, stop and follow the protocol.
